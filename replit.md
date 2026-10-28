@@ -1,10 +1,12 @@
-# [Project name]
+# MÁLAGA WELCOME
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Web de catálogo y solicitudes de presupuesto para packs de bienvenida e higiene destinados a gestores de apartamentos turísticos de Málaga y la Costa del Sol.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Open the managed `artifacts/malaga-welcome: web` workflow to run the website preview.
+- `pnpm --filter @workspace/malaga-welcome run typecheck` — check the website package.
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -22,23 +24,36 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/malaga-welcome/src/data/catalog.ts` — product and combo names, compositions, prices, images, and optional stock.
+- `artifacts/malaga-welcome/src/data/business.ts` — WhatsApp, email, and legal-detail configuration; real details are intentionally blank until supplied.
+- `artifacts/malaga-welcome/public/images/` — optimized product images provided by the user.
+- `artifacts/api-server/src/routes/quotes.ts` — quote submission endpoint.
+- `lib/db/src/schema/index.ts` — stored quote-request schema.
+- `lib/api-spec/openapi.yaml` — source of truth for the API contract.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Quote submissions are non-binding leads stored in PostgreSQL; the site does not confirm orders or send an email notification.
+- Product and bundle prices are editable site configuration. Bundle prices are proposed and must be confirmed before accepting an order.
+- Stock starts unset; once stock values are entered, the quantity builder checks individual products and bundle components together.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Presents four welcome/hygiene packs with product photos, contents, and VAT-inclusive prices.
+- Shows three proposed combos and a custom quantity calculator.
+- Collects quote requests and prepares a WhatsApp message without inventing a contact number.
+- Includes draft legal and privacy pages that require business details and legal review before publication.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Do not publish the website or start paid services without the user's authorization.
+- Do not invent the business's contact details, legal identity, certifications, or customer reviews.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Legal and privacy text is explicitly a draft; complete and review it before publication.
+- WhatsApp and email configuration values are blank until the business supplies them.
+- Quote requests are saved to the database for the owner; no notification email is configured yet.
 
 ## Pointers
 

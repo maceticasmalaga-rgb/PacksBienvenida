@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "MÁLAGA WELCOME"
+description = "Web profesional para presentar packs de bienvenida e higiene personal a gestores de apartamentos turísticos de Málaga y la Costa del Sol, con catálogo, combos y solicitudes de presupuesto."
+version = "1.0.0"
+id = "artifacts/malaga-welcome"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26056
+
+[services.development]
+run = "pnpm --filter @workspace/malaga-welcome run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/malaga-welcome", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/malaga-welcome/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26056"
+BASE_PATH = "/"

@@ -1,0 +1,1 @@
+- [Patch hunk ordering](patch-hunk-ordering.md) — apply_patch hunks in file order; split edits into separate passes when necessary.
