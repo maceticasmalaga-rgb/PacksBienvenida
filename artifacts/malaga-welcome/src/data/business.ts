@@ -1,6 +1,6 @@
 export const businessConfig = {
   brand: 'MÁLAGA WELCOME',
-  whatsappNumber: '',
+  whatsappNumber: import.meta.env.VITE_MALAGA_WHATSAPP_NUMBER?.trim() ?? '',
   email: '',
 };
 

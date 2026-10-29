@@ -31,7 +31,7 @@ paths:
       operationId: submitQuote
       tags: [quotes]
       summary: Submit a quote request
-      description: Saves a non-binding quote request for the business owner to review.
+      description: Calculates prices on the server, saves the non-binding request, then attempts both email notifications.
       requestBody:
         required: true
         content:
@@ -51,7 +51,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/quotes:
+    get:
+      operationId: listAdminQuotes
+      tags: [admin]
+      summary: Search and list quote requests
+      security:
+        - ClerkSession: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/QuoteStatus"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Filtered quote requests and status summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminQuoteList"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Administrator access required
+  /admin/quotes/export.csv:
+    get:
+      operationId: exportAdminQuotesCsv
+      tags: [admin]
+      summary: Export filtered quote requests as CSV
+      security:
+        - ClerkSession: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/QuoteStatus"
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Sign-in required
+        "403":
+          description: Administrator access required
+  /admin/quotes/{id}:
+    patch:
+      operationId: updateAdminQuote
+      tags: [admin]
+      summary: Update quote status and private follow-up fields
+      security:
+        - ClerkSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminQuoteUpdate"
+      responses:
+        "200":
+          description: Updated quote request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminQuote"
+        "400":
+          description: Invalid update
+        "401":
+          description: Sign-in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Quote request not found
 components:
+  securitySchemes:
+    ClerkSession:
+      type: apiKey
+      in: cookie
+      name: __session
   schemas:
     HealthStatus:
       type: object
@@ -70,29 +179,14 @@ components:
           type: string
           minLength: 1
           maxLength: 80
-        name:
-          type: string
-          minLength: 1
-          maxLength: 160
         quantity:
           type: integer
           minimum: 1
           maximum: 9999
-        unitPrice:
-          type: number
-          minimum: 0
-          maximum: 1000000
-        lineTotal:
-          type: number
-          minimum: 0
-          maximum: 10000000
       required:
         - selectionType
         - selectionId
-        - name
         - quantity
-        - unitPrice
-        - lineTotal
     QuoteRequestInput:
       type: object
       properties:
@@ -118,17 +212,9 @@ components:
         items:
           type: array
           minItems: 1
-          maxItems: 40
+          maxItems: 7
           items:
             $ref: "#/components/schemas/QuoteLineInput"
-        totalUnits:
-          type: integer
-          minimum: 1
-          maximum: 1000000
-        estimatedTotal:
-          type: number
-          minimum: 0
-          maximum: 10000000
         notes:
           type: ["string", "null"]
           maxLength: 2000
@@ -137,8 +223,6 @@ components:
         - contactName
         - email
         - items
-        - totalUnits
-        - estimatedTotal
     QuoteRequestReceipt:
       type: object
       properties:
@@ -148,9 +232,205 @@ components:
         receivedAt:
           type: string
           format: date-time
+        individualUnits:
+          type: integer
+        totalUnits:
+          type: integer
+        subtotal:
+          type: number
+        discountTotal:
+          type: number
+        estimatedTotal:
+          type: number
       required:
         - id
         - receivedAt
+        - individualUnits
+        - totalUnits
+        - subtotal
+        - discountTotal
+        - estimatedTotal
+    QuoteStatus:
+      type: string
+      enum:
+        - new
+        - pending_contact
+        - quote_sent
+        - negotiating
+        - accepted
+        - rejected
+        - completed
+    QuoteEmailStatus:
+      type: string
+      enum:
+        - not_configured
+        - sent
+        - failed
+    AdminQuoteItem:
+      type: object
+      properties:
+        selectionType:
+          type: string
+          enum: [product, combo]
+        selectionId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        units:
+          type: integer
+        unitPrice:
+          type: number
+        subtotal:
+          type: number
+        discount:
+          type: number
+        lineTotal:
+          type: number
+      required:
+        - selectionType
+        - selectionId
+        - name
+        - quantity
+        - units
+        - unitPrice
+        - subtotal
+        - discount
+        - lineTotal
+    AdminQuote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        companyName:
+          type: string
+        contactName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: ["string", "null"]
+        apartmentCount:
+          type: ["integer", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminQuoteItem"
+        individualUnits:
+          type: integer
+        totalUnits:
+          type: integer
+        subtotal:
+          type: number
+        discountTotal:
+          type: number
+        estimatedTotal:
+          type: number
+        notes:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/QuoteStatus"
+        adminNotes:
+          type: ["string", "null"]
+        lastContactAt:
+          type: ["string", "null"]
+          format: date-time
+        nextFollowUpAt:
+          type: ["string", "null"]
+          format: date-time
+        finalSaleAmount:
+          type: ["number", "null"]
+        businessEmailStatus:
+          $ref: "#/components/schemas/QuoteEmailStatus"
+        customerEmailStatus:
+          $ref: "#/components/schemas/QuoteEmailStatus"
+        receivedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - companyName
+        - contactName
+        - email
+        - phone
+        - apartmentCount
+        - items
+        - individualUnits
+        - totalUnits
+        - subtotal
+        - discountTotal
+        - estimatedTotal
+        - notes
+        - status
+        - adminNotes
+        - lastContactAt
+        - nextFollowUpAt
+        - finalSaleAmount
+        - businessEmailStatus
+        - customerEmailStatus
+        - receivedAt
+        - updatedAt
+    AdminQuoteStatusCount:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/QuoteStatus"
+        count:
+          type: integer
+      required:
+        - status
+        - count
+    AdminQuoteList:
+      type: object
+      properties:
+        quotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminQuote"
+        statusCounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminQuoteStatusCount"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - quotes
+        - statusCounts
+        - total
+        - page
+        - pageSize
+        - totalPages
+    AdminQuoteUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        status:
+          $ref: "#/components/schemas/QuoteStatus"
+        adminNotes:
+          type: ["string", "null"]
+          maxLength: 5000
+        lastContactAt:
+          type: ["string", "null"]
+          format: date-time
+        nextFollowUpAt:
+          type: ["string", "null"]
+          format: date-time
+        finalSaleAmount:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 10000000
     ApiError:
       type: object
       properties:

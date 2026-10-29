@@ -1,17 +1,83 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownRight, ArrowRight, Copy, Leaf, PackageCheck, ShieldCheck } from 'lucide-react';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
 import { useSubmitQuote } from '@workspace/api-client-react';
+import { calculateQuote, type QuoteSelectionInput } from '@workspace/catalog';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import AdminPage from '@/pages/AdminPage';
 import NotFound from '@/pages/not-found';
-import { Route, Switch, useLocation, Router as WouterRouter, Link } from 'wouter';
+import { Redirect, Route, Switch, useLocation, Router as WouterRouter, Link } from 'wouter';
 import { businessConfig } from './data/business';
 import { combos, formatEuro, productById, products } from './data/catalog';
 
 const queryClient = new QueryClient();
-type Selection = { type: 'product' | 'combo'; id: string; name: string; quantity: number; unitPrice: number; units: number };
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || '/'
+    : path;
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/favicon.svg`,
+  },
+  variables: {
+    colorPrimary: '#3d5b4d',
+    colorForeground: '#263d35',
+    colorMutedForeground: '#69766e',
+    colorDanger: '#a8473c',
+    colorBackground: '#fbfaf6',
+    colorInput: '#fffefa',
+    colorInputForeground: '#263d35',
+    colorNeutral: '#e2ddd1',
+    fontFamily: "'DM Sans', sans-serif",
+    borderRadius: '2px',
+  },
+  elements: {
+    rootBox: { width: '100%', display: 'flex', justifyContent: 'center' },
+    cardBox: {
+      backgroundColor: '#fffefa',
+      border: '1px solid #e5dfd3',
+      borderRadius: '2px',
+      width: '440px',
+      maxWidth: '100%',
+      overflow: 'hidden',
+    },
+    card: {
+      boxShadow: 'none',
+      border: '0',
+      backgroundColor: 'transparent',
+      borderRadius: '0',
+    },
+    footer: {
+      boxShadow: 'none',
+      border: '0',
+      backgroundColor: 'transparent',
+      borderRadius: '0',
+    },
+    headerTitle: { fontFamily: "'Playfair Display', serif", color: '#263d35' },
+    headerSubtitle: { color: '#69766e' },
+    formButtonPrimary: { backgroundColor: '#3d5b4d', borderRadius: '2px' },
+    formFieldInput: { borderRadius: '2px', borderColor: '#ded8cd' },
+    logoImage: { objectFit: 'contain' },
+  },
+};
 
 function Brand() {
   return <Link href="/" className="brand">MÁLAGA WELCOME<small>BIENVENIDAS CON DETALLE</small></Link>;
@@ -38,7 +104,7 @@ function Footer() {
       <div className="container-wide">
         <div className="footer-top">
           <div><Brand /><p className="footer-note">Packs de bienvenida e higiene para alojamientos turísticos en Málaga y Costa del Sol.</p></div>
-          <div className="footer-links"><a href="/#catalog">Catálogo</a><a href="/#quote">Presupuestos</a><Link href="/aviso-legal">Aviso legal</Link><Link href="/privacidad">Privacidad</Link></div>
+          <div className="footer-links"><a href="/#catalog">Catálogo</a><a href="/#quote">Presupuestos</a><Link href="/admin">Acceso privado</Link><Link href="/aviso-legal">Aviso legal</Link><Link href="/privacidad">Privacidad</Link></div>
         </div>
         <div className="footer-bottom"><span>© {new Date().getFullYear()} MÁLAGA WELCOME</span><span>Precios con IVA incluido · Presupuestos no vinculantes</span></div>
       </div>
@@ -48,6 +114,10 @@ function Footer() {
 
 function goToQuote() {
   document.getElementById('quote')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function goToConfigurator() {
+  document.getElementById('builder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function getInventoryIssue(quantities: Record<string, number>) {
@@ -78,20 +148,26 @@ function Home() {
   const [form, setForm] = useState({ companyName: '', contactName: '', email: '', phone: '', apartmentCount: '', notes: '', privacyAccepted: false });
   const quoteMutation = useSubmitQuote();
 
-  const selected = useMemo<Selection[]>(() => {
+  const estimate = useMemo(() => {
+    const selections: QuoteSelectionInput[] = [];
     const productSelections = products.flatMap((product) => {
       const quantity = Math.max(0, Math.floor(Number(quantities[`product:${product.id}`]) || 0));
-      return quantity ? [{ type: 'product' as const, id: product.id, name: product.name, quantity, unitPrice: product.price, units: quantity }] : [];
+      return quantity ? [{ selectionType: 'product' as const, selectionId: product.id, quantity }] : [];
     });
     const comboSelections = combos.flatMap((combo) => {
       const quantity = Math.max(0, Math.floor(Number(quantities[`combo:${combo.id}`]) || 0));
-      return quantity ? [{ type: 'combo' as const, id: combo.id, name: `Combo ${combo.name}`, quantity, unitPrice: combo.price, units: combo.units * quantity }] : [];
+      return quantity ? [{ selectionType: 'combo' as const, selectionId: combo.id, quantity }] : [];
     });
-    return [...productSelections, ...comboSelections];
+    selections.push(...productSelections, ...comboSelections);
+    return selections.length ? calculateQuote(selections) : null;
   }, [quantities]);
 
-  const totalUnits = selected.reduce((sum, selection) => sum + selection.units, 0);
-  const total = selected.reduce((sum, selection) => sum + selection.quantity * selection.unitPrice, 0);
+  const selected = estimate?.items ?? [];
+  const totalUnits = estimate?.totalUnits ?? 0;
+  const individualUnits = estimate?.individualUnits ?? 0;
+  const subtotal = (estimate?.subtotalCents ?? 0) / 100;
+  const discount = (estimate?.discountCents ?? 0) / 100;
+  const total = (estimate?.totalCents ?? 0) / 100;
 
   const setQuantity = (key: string, nextValue: number) => {
     const value = Number.isFinite(nextValue) ? Math.max(0, Math.min(9999, Math.floor(nextValue))) : 0;
@@ -117,7 +193,7 @@ function Home() {
     const current = quantities[`combo:${id}`] || 0;
     if (!setQuantity(`combo:${id}`, current + 1)) return;
     setSelectionNotice(`${combos.find((combo) => combo.id === id)?.name ?? 'Combo'} añadido a tu selección.`);
-    goToQuote();
+    goToConfigurator();
   };
 
   const sendWhatsAppMessage = async (message: string) => {
@@ -149,11 +225,12 @@ function Home() {
 
   const handleWhatsAppSelection = () => {
     if (!selected.length) return;
-    const lines = selected.map((line) => `${line.quantity} × ${line.name}: ${formatEuro(line.quantity * line.unitPrice)}`);
+    const lines = selected.map((line) => `${line.quantity} × ${line.name}: ${formatEuro(line.totalCents / 100)}`);
     const message = [
       'Hola, quisiera solicitar información sobre esta selección:',
       ...lines,
-      `Total estimado (${totalUnits} packs): ${formatEuro(total)} (IVA incluido).`,
+      `Unidades individuales: ${individualUnits}; unidades totales: ${totalUnits}.`,
+      `Subtotal: ${formatEuro(subtotal)}; descuento: ${formatEuro(discount)}; total estimado: ${formatEuro(total)} (IVA incluido).`,
       'Presupuesto no vinculante; cantidades, disponibilidad y precios sujetos a confirmación.',
     ].join('\n');
     void sendWhatsAppMessage(message);
@@ -195,15 +272,10 @@ function Home() {
         phone: form.phone.trim() || null,
         apartmentCount,
         items: selected.map((selection) => ({
-          selectionType: selection.type,
-          selectionId: selection.id,
-          name: selection.name,
+          selectionType: selection.selectionType,
+          selectionId: selection.selectionId,
           quantity: selection.quantity,
-          unitPrice: selection.unitPrice,
-          lineTotal: Number((selection.quantity * selection.unitPrice).toFixed(2)),
         })),
-        totalUnits,
-        estimatedTotal: Number(total.toFixed(2)),
         notes: form.notes.trim() || null,
       },
     });
@@ -305,9 +377,16 @@ function Home() {
               </div>
               <aside className="summary-card">
                 <h3>Tu selección</h3>
-                {selected.length ? selected.map((line) => <div className="summary-line" key={`${line.type}-${line.id}`}><span>{line.quantity} × {line.name}</span><strong>{formatEuro(line.quantity * line.unitPrice)}</strong></div>) : <div className="summary-line"><span>Aún no has seleccionado ningún producto</span><span>—</span></div>}
-                <div className="summary-total"><span>{totalUnits} packs en total</span><strong>{formatEuro(total)}</strong></div>
-                <span style={{ display: 'block', textAlign: 'right', fontSize: 10, color: '#77817d' }}>Total estimado · IVA incluido</span>
+                {selected.length ? selected.map((line) => <div className="summary-line" key={`${line.selectionType}-${line.selectionId}`}><span>{line.quantity} × {line.name}</span><strong>{formatEuro(line.totalCents / 100)}</strong></div>) : <div className="summary-line"><span>Aún no has seleccionado ningún producto</span><span>—</span></div>}
+                {selected.some((line) => line.discountCents > 0) && <p className="discount-note">Descuento del 15 % aplicado solo a productos individuales.</p>}
+                <div className="summary-metrics">
+                  <div><span>Unidades individuales</span><strong>{individualUnits}</strong></div>
+                  <div><span>Unidades en combos</span><strong>{totalUnits - individualUnits}</strong></div>
+                  <div><span>Subtotal</span><strong>{formatEuro(subtotal)}</strong></div>
+                  <div><span>Descuento individual</span><strong>−{formatEuro(discount)}</strong></div>
+                </div>
+                <div className="summary-total"><span>{totalUnits} unidades · total final</span><strong>{formatEuro(total)}</strong></div>
+                <span style={{ display: 'block', textAlign: 'right', fontSize: 10, color: '#77817d' }}>IVA incluido · Combos sin descuento</span>
                 <button type="button" className="btn" onClick={goToQuote} disabled={!selected.length}>Solicitar presupuesto <ArrowRight size={14} /></button>
                 <button type="button" className="btn btn-outline" onClick={handleWhatsAppSelection} disabled={!selected.length}>Preparar mensaje de WhatsApp</button>
                 <p className="summary-hint">Presupuesto no vinculante. Los precios de los combos son propuestas pendientes de confirmación.</p>
@@ -329,6 +408,7 @@ function Home() {
                 <div className="form-success" role="status" data-testid="status-quote-success">
                   <h3>Solicitud recibida.</h3><p>La referencia de tu solicitud no vinculante es <strong>{quoteMutation.data.id}</strong>.</p>
                   <p>Recibida el {new Date(quoteMutation.data.receivedAt).toLocaleString('es-ES')}.</p>
+                  <p>Subtotal: {formatEuro(quoteMutation.data.subtotal)} · Descuento: {formatEuro(quoteMutation.data.discountTotal)} · Total final: <strong>{formatEuro(quoteMutation.data.estimatedTotal)}</strong>.</p>
                   <button type="button" className="btn btn-outline" onClick={() => quoteMutation.reset()}>Enviar otra solicitud</button>
                 </div>
               ) : (
@@ -342,9 +422,10 @@ function Home() {
                     <Field label="Observaciones (opcional)" id="notes" full><textarea id="notes" name="notes" maxLength={2000} placeholder="Añade cualquier detalle útil sobre tu negocio." value={form.notes} onChange={(event) => setField('notes', event.target.value)} data-testid="input-notes" /></Field>
                   </div>
                   <div className="form-selection" data-testid="text-quote-summary">
-                    <strong>{selected.length ? `${totalUnits} packs · ${formatEuro(total)} estimados` : 'Aún no has seleccionado ningún pack'}</strong>
-                    {selected.map((line) => <div key={`${line.type}-${line.id}`}>{line.quantity} × {line.name} — {formatEuro(line.quantity * line.unitPrice)}</div>)}
-                    <div>IVA incluido. Precios de combos pendientes de confirmación.</div>
+                    <strong>{selected.length ? `${totalUnits} unidades · ${formatEuro(total)} total final` : 'Aún no has seleccionado ningún pack'}</strong>
+                    {selected.map((line) => <div key={`${line.selectionType}-${line.selectionId}`}>{line.quantity} × {line.name} — {formatEuro(line.totalCents / 100)}{line.discountCents ? ` (−${formatEuro(line.discountCents / 100)})` : ''}</div>)}
+                    <div>Unidades individuales: {individualUnits} · Subtotal: {formatEuro(subtotal)} · Descuento: −{formatEuro(discount)} · Total: {formatEuro(total)}.</div>
+                    <div>Los combos conservan su precio y no cuentan para el descuento. IVA incluido.</div>
                   </div>
                   <label className="checkbox-line"><input type="checkbox" checked={form.privacyAccepted} onChange={(event) => setField('privacyAccepted', event.target.checked)} required data-testid="input-privacy-consent" />He leído la <Link href="/privacidad">información de privacidad</Link> y autorizo el envío de estos datos para esta solicitud.</label>
                   {selectionNotice && <p className="form-error" role="alert">{selectionNotice}</p>}
@@ -418,9 +499,75 @@ function LegalPage({ privacy = false }: { privacy?: boolean }) {
   </main><Footer /></div>;
 }
 
+function SignInPage() {
+  return (
+    <main className="auth-page">
+      <Link className="auth-brand" href="/">MÁLAGA WELCOME</Link>
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+        appearance={clerkAppearance}
+      />
+    </main>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <main className="auth-page">
+      <Link className="auth-brand" href="/">MÁLAGA WELCOME</Link>
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        appearance={clerkAppearance}
+      />
+    </main>
+  );
+}
+
+function HomeRedirect() {
+  const { isLoaded, isSignedIn } = useAuth();
+  return isLoaded && isSignedIn ? <Redirect to="/admin" /> : <Home />;
+}
+
+function AdminRoute() {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) {
+    return <main className="admin-loading">Comprobando acceso…</main>;
+  }
+  if (!isSignedIn) {
+    return <Redirect to="/sign-in" />;
+  }
+  return <AdminPage />;
+}
+
+function ClerkQueryCacheInvalidator() {
+  const { addListener } = useClerk();
+  const reactQuery = useQueryClient();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (previousUserId.current !== undefined && previousUserId.current !== userId) {
+        reactQuery.clear();
+      }
+      previousUserId.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, reactQuery]);
+
+  return null;
+}
+
 function Router() {
   return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={Home} />
+    <Route path="/" component={HomeRedirect} />
+    <Route path="/sign-in/*?" component={SignInPage} />
+    <Route path="/sign-up/*?" component={SignUpPage} />
+    <Route path="/admin" component={AdminRoute} />
     <Route path="/aviso-legal"><LegalPage /></Route>
     <Route path="/privacidad"><LegalPage privacy /></Route>
     <Route component={NotFound} />
@@ -432,10 +579,53 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      localization={{
+        signIn: {
+          start: {
+            title: "Accede a tu cuenta",
+            subtitle: "Inicia sesión para gestionar solicitudes.",
+          },
+        },
+        signUp: {
+          start: {
+            title: "Crear cuenta",
+            subtitle: "El acceso al panel está limitado a cuentas autorizadas.",
+          },
+        },
+      }}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryCacheInvalidator />
+        <TooltipProvider>
+          <Router />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
+}
+
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider>
-    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster />
-  </TooltipProvider></QueryClientProvider>;
+  if (!clerkPubKey) {
+    throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY.");
+  }
+  return (
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRoutes />
+    </WouterRouter>
+  );
 }
 
 export default App;

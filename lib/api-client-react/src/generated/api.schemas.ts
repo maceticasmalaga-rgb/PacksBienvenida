@@ -25,25 +25,10 @@ export interface QuoteLineInput {
      */
   selectionId: string;
   /**
-     * @minLength 1
-     * @maxLength 160
-     */
-  name: string;
-  /**
      * @minimum 1
      * @maximum 9999
      */
   quantity: number;
-  /**
-     * @minimum 0
-     * @maximum 1000000
-     */
-  unitPrice: number;
-  /**
-     * @minimum 0
-     * @maximum 10000000
-     */
-  lineTotal: number;
 }
 
 export interface QuoteRequestInput {
@@ -72,19 +57,9 @@ export interface QuoteRequestInput {
   apartmentCount?: number | null;
   /**
      * @minItems 1
-     * @maxItems 40
+     * @maxItems 7
      */
   items: QuoteLineInput[];
-  /**
-     * @minimum 1
-     * @maximum 1000000
-     */
-  totalUnits: number;
-  /**
-     * @minimum 0
-     * @maximum 10000000
-     */
-  estimatedTotal: number;
   /**
      * @maxLength 2000
      * @nullable
@@ -95,9 +70,146 @@ export interface QuoteRequestInput {
 export interface QuoteRequestReceipt {
   id: string;
   receivedAt: string;
+  individualUnits: number;
+  totalUnits: number;
+  subtotal: number;
+  discountTotal: number;
+  estimatedTotal: number;
+}
+
+export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
+
+
+export const QuoteStatus = {
+  new: 'new',
+  pending_contact: 'pending_contact',
+  quote_sent: 'quote_sent',
+  negotiating: 'negotiating',
+  accepted: 'accepted',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export type QuoteEmailStatus = typeof QuoteEmailStatus[keyof typeof QuoteEmailStatus];
+
+
+export const QuoteEmailStatus = {
+  not_configured: 'not_configured',
+  sent: 'sent',
+  failed: 'failed',
+} as const;
+
+export type AdminQuoteItemSelectionType = typeof AdminQuoteItemSelectionType[keyof typeof AdminQuoteItemSelectionType];
+
+
+export const AdminQuoteItemSelectionType = {
+  product: 'product',
+  combo: 'combo',
+} as const;
+
+export interface AdminQuoteItem {
+  selectionType: AdminQuoteItemSelectionType;
+  selectionId: string;
+  name: string;
+  quantity: number;
+  units: number;
+  unitPrice: number;
+  subtotal: number;
+  discount: number;
+  lineTotal: number;
+}
+
+export interface AdminQuote {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  /** @nullable */
+  phone: string | null;
+  /** @nullable */
+  apartmentCount: number | null;
+  items: AdminQuoteItem[];
+  individualUnits: number;
+  totalUnits: number;
+  subtotal: number;
+  discountTotal: number;
+  estimatedTotal: number;
+  /** @nullable */
+  notes: string | null;
+  status: QuoteStatus;
+  /** @nullable */
+  adminNotes: string | null;
+  /** @nullable */
+  lastContactAt: string | null;
+  /** @nullable */
+  nextFollowUpAt: string | null;
+  /** @nullable */
+  finalSaleAmount: number | null;
+  businessEmailStatus: QuoteEmailStatus;
+  customerEmailStatus: QuoteEmailStatus;
+  receivedAt: string;
+  updatedAt: string;
+}
+
+export interface AdminQuoteStatusCount {
+  status: QuoteStatus;
+  count: number;
+}
+
+export interface AdminQuoteList {
+  quotes: AdminQuote[];
+  statusCounts: AdminQuoteStatusCount[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminQuoteUpdate {
+  status?: QuoteStatus;
+  /**
+     * @maxLength 5000
+     * @nullable
+     */
+  adminNotes?: string | null;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  nextFollowUpAt?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     * @nullable
+     */
+  finalSaleAmount?: number | null;
 }
 
 export interface ApiError {
   error: string;
 }
+
+export type ListAdminQuotesParams = {
+/**
+ * @maxLength 200
+ */
+q?: string;
+status?: QuoteStatus;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type ExportAdminQuotesCsvParams = {
+/**
+ * @maxLength 200
+ */
+q?: string;
+status?: QuoteStatus;
+};
 

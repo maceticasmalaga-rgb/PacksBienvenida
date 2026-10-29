@@ -33,19 +33,9 @@ export interface QuoteRequestInput {
   apartmentCount?: number | null;
   /**
      * @minItems 1
-     * @maxItems 40
+     * @maxItems 7
      */
   items: QuoteLineInput[];
-  /**
-     * @minimum 1
-     * @maximum 1000000
-     */
-  totalUnits: number;
-  /**
-     * @minimum 0
-     * @maximum 10000000
-     */
-  estimatedTotal: number;
   /**
      * @maxLength 2000
      * @nullable

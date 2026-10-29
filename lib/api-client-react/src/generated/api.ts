@@ -20,8 +20,13 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminQuote,
+  AdminQuoteList,
+  AdminQuoteUpdate,
   ApiError,
+  ExportAdminQuotesCsvParams,
   HealthStatus,
+  ListAdminQuotesParams,
   QuoteRequestInput,
   QuoteRequestReceipt
 } from './api.schemas';
@@ -140,7 +145,7 @@ export const getSubmitQuoteUrl = () => {
 }
 
 /**
- * Saves a non-binding quote request for the business owner to review.
+ * Calculates prices on the server, saves the non-binding request, then attempts both email notifications.
  * @summary Submit a quote request
  */
 export const submitQuote = async (quoteRequestInput: QuoteRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<QuoteRequestReceipt> => {
@@ -218,5 +223,262 @@ export const useSubmitQuote = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getSubmitQuoteMutationOptions(options));
+    }
+
+export const getListAdminQuotesUrl = (params?: ListAdminQuotesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/quotes?${stringifiedParams}` : `/api/admin/quotes`
+}
+
+/**
+ * @summary Search and list quote requests
+ */
+export const listAdminQuotes = async (params?: ListAdminQuotesParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminQuoteList> => {
+
+  return customFetch<AdminQuoteList>(getListAdminQuotesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminQuotesQueryKey = (params?: ListAdminQuotesParams,) => {
+    return [
+    `/api/admin/quotes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminQuotesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminQuotes>>, TError = ErrorType<void>>(params?: ListAdminQuotesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminQuotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminQuotesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminQuotes>>> = ({ signal }) => listAdminQuotes(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminQuotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminQuotesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminQuotes>>>
+export type ListAdminQuotesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Search and list quote requests
+ */
+
+export function useListAdminQuotes<TData = Awaited<ReturnType<typeof listAdminQuotes>>, TError = ErrorType<void>>(
+ params?: ListAdminQuotesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminQuotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminQuotesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportAdminQuotesCsvUrl = (params?: ExportAdminQuotesCsvParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/quotes/export.csv?${stringifiedParams}` : `/api/admin/quotes/export.csv`
+}
+
+/**
+ * @summary Export filtered quote requests as CSV
+ */
+export const exportAdminQuotesCsv = async (params?: ExportAdminQuotesCsvParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportAdminQuotesCsvUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportAdminQuotesCsvQueryKey = (params?: ExportAdminQuotesCsvParams,) => {
+    return [
+    `/api/admin/quotes/export.csv`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportAdminQuotesCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportAdminQuotesCsv>>, TError = ErrorType<void>>(params?: ExportAdminQuotesCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportAdminQuotesCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportAdminQuotesCsvQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAdminQuotesCsv>>> = ({ signal }) => exportAdminQuotesCsv(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportAdminQuotesCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportAdminQuotesCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportAdminQuotesCsv>>>
+export type ExportAdminQuotesCsvQueryError = ErrorType<void>
+
+
+/**
+ * @summary Export filtered quote requests as CSV
+ */
+
+export function useExportAdminQuotesCsv<TData = Awaited<ReturnType<typeof exportAdminQuotesCsv>>, TError = ErrorType<void>>(
+ params?: ExportAdminQuotesCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportAdminQuotesCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportAdminQuotesCsvQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminQuoteUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/quotes/${id}`
+}
+
+/**
+ * @summary Update quote status and private follow-up fields
+ */
+export const updateAdminQuote = async (id: string,
+    adminQuoteUpdate: AdminQuoteUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminQuote> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminQuote>(getUpdateAdminQuoteUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminQuoteUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminQuoteMutationKey = () => ['updateAdminQuote'] as const;
+
+export const getUpdateAdminQuoteMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminQuote>>, TError,UpdateAdminQuoteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminQuote>>, TError,UpdateAdminQuoteMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminQuoteMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminQuote>>, UpdateAdminQuoteMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAdminQuote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminQuoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminQuote>>>
+    export type UpdateAdminQuoteMutationBody = BodyType<AdminQuoteUpdate>
+    export type UpdateAdminQuoteMutationError = ErrorType<void>
+    export type UpdateAdminQuoteMutationVariables = {id: string;data: BodyType<AdminQuoteUpdate>}
+
+    /**
+ * @summary Update quote status and private follow-up fields
+ */
+export const useUpdateAdminQuote = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminQuote>>, TError,UpdateAdminQuoteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminQuote>>,
+        TError,
+        UpdateAdminQuoteMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminQuoteMutationOptions(options));
     }
 

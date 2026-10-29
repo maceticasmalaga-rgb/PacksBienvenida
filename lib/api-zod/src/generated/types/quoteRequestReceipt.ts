@@ -9,4 +9,9 @@
 export interface QuoteRequestReceipt {
   id: string;
   receivedAt: Date;
+  individualUnits: number;
+  totalUnits: number;
+  subtotal: number;
+  discountTotal: number;
+  estimatedTotal: number;
 }

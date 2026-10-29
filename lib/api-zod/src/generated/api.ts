@@ -18,7 +18,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Saves a non-binding quote request for the business owner to review.
+ * Calculates prices on the server, saves the non-binding request, then attempts both email notifications.
  * @summary Submit a quote request
  */
 export const submitQuoteBodyCompanyNameMax = 160;
@@ -34,22 +34,9 @@ export const submitQuoteBodyApartmentCountMax = 1000000;
 
 export const submitQuoteBodyItemsItemSelectionIdMax = 80;
 
-export const submitQuoteBodyItemsItemNameMax = 160;
-
 export const submitQuoteBodyItemsItemQuantityMax = 9999;
 
-export const submitQuoteBodyItemsItemUnitPriceMin = 0;
-export const submitQuoteBodyItemsItemUnitPriceMax = 1000000;
-
-export const submitQuoteBodyItemsItemLineTotalMin = 0;
-export const submitQuoteBodyItemsItemLineTotalMax = 10000000;
-
-export const submitQuoteBodyItemsMax = 40;
-
-export const submitQuoteBodyTotalUnitsMax = 1000000;
-
-export const submitQuoteBodyEstimatedTotalMin = 0;
-export const submitQuoteBodyEstimatedTotalMax = 10000000;
+export const submitQuoteBodyItemsMax = 7;
 
 export const submitQuoteBodyNotesMax = 2000;
 
@@ -64,19 +51,157 @@ export const SubmitQuoteBody = zod.object({
   "items": zod.array(zod.object({
   "selectionType": zod.enum(['product', 'combo']),
   "selectionId": zod.string().min(1).max(submitQuoteBodyItemsItemSelectionIdMax),
-  "name": zod.string().min(1).max(submitQuoteBodyItemsItemNameMax),
-  "quantity": zod.number().int().min(1).max(submitQuoteBodyItemsItemQuantityMax),
-  "unitPrice": zod.number().min(submitQuoteBodyItemsItemUnitPriceMin).max(submitQuoteBodyItemsItemUnitPriceMax),
-  "lineTotal": zod.number().min(submitQuoteBodyItemsItemLineTotalMin).max(submitQuoteBodyItemsItemLineTotalMax)
+  "quantity": zod.number().int().min(1).max(submitQuoteBodyItemsItemQuantityMax)
 })).min(1).max(submitQuoteBodyItemsMax),
-  "totalUnits": zod.number().int().min(1).max(submitQuoteBodyTotalUnitsMax),
-  "estimatedTotal": zod.number().min(submitQuoteBodyEstimatedTotalMin).max(submitQuoteBodyEstimatedTotalMax),
   "notes": zod.string().max(submitQuoteBodyNotesMax).nullish()
 })
 
 export const SubmitQuoteResponse = zod.object({
   "id": zod.string().uuid(),
-  "receivedAt": zod.coerce.date()
+  "receivedAt": zod.coerce.date(),
+  "individualUnits": zod.number().int(),
+  "totalUnits": zod.number().int(),
+  "subtotal": zod.number(),
+  "discountTotal": zod.number(),
+  "estimatedTotal": zod.number()
+})
+
+
+/**
+ * @summary Search and list quote requests
+ */
+export const listAdminQuotesQueryQMax = 200;
+
+export const listAdminQuotesQueryPageDefault = 1;
+
+export const listAdminQuotesQueryPageSizeDefault = 25;
+export const listAdminQuotesQueryPageSizeMax = 100;
+
+
+
+export const ListAdminQuotesQueryParams = zod.object({
+  "q": zod.coerce.string().max(listAdminQuotesQueryQMax).optional(),
+  "status": zod.enum(['new', 'pending_contact', 'quote_sent', 'negotiating', 'accepted', 'rejected', 'completed']).optional(),
+  "page": zod.coerce.number().int().min(1).default(listAdminQuotesQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminQuotesQueryPageSizeMax).default(listAdminQuotesQueryPageSizeDefault)
+})
+
+export const ListAdminQuotesResponse = zod.object({
+  "quotes": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string(),
+  "contactName": zod.string(),
+  "email": zod.string().email(),
+  "phone": zod.string().nullable(),
+  "apartmentCount": zod.number().int().nullable(),
+  "items": zod.array(zod.object({
+  "selectionType": zod.enum(['product', 'combo']),
+  "selectionId": zod.string(),
+  "name": zod.string(),
+  "quantity": zod.number().int(),
+  "units": zod.number().int(),
+  "unitPrice": zod.number(),
+  "subtotal": zod.number(),
+  "discount": zod.number(),
+  "lineTotal": zod.number()
+})),
+  "individualUnits": zod.number().int(),
+  "totalUnits": zod.number().int(),
+  "subtotal": zod.number(),
+  "discountTotal": zod.number(),
+  "estimatedTotal": zod.number(),
+  "notes": zod.string().nullable(),
+  "status": zod.enum(['new', 'pending_contact', 'quote_sent', 'negotiating', 'accepted', 'rejected', 'completed']),
+  "adminNotes": zod.string().nullable(),
+  "lastContactAt": zod.coerce.date().nullable(),
+  "nextFollowUpAt": zod.coerce.date().nullable(),
+  "finalSaleAmount": zod.number().nullable(),
+  "businessEmailStatus": zod.enum(['not_configured', 'sent', 'failed']),
+  "customerEmailStatus": zod.enum(['not_configured', 'sent', 'failed']),
+  "receivedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "statusCounts": zod.array(zod.object({
+  "status": zod.enum(['new', 'pending_contact', 'quote_sent', 'negotiating', 'accepted', 'rejected', 'completed']),
+  "count": zod.number().int()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "totalPages": zod.number().int()
+})
+
+
+/**
+ * @summary Export filtered quote requests as CSV
+ */
+export const exportAdminQuotesCsvQueryQMax = 200;
+
+
+
+export const ExportAdminQuotesCsvQueryParams = zod.object({
+  "q": zod.coerce.string().max(exportAdminQuotesCsvQueryQMax).optional(),
+  "status": zod.enum(['new', 'pending_contact', 'quote_sent', 'negotiating', 'accepted', 'rejected', 'completed']).optional()
+})
+
+export const ExportAdminQuotesCsvResponse = zod.unknown()
+
+
+/**
+ * @summary Update quote status and private follow-up fields
+ */
+export const UpdateAdminQuoteParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const updateAdminQuoteBodyAdminNotesMax = 5000;
+
+export const updateAdminQuoteBodyFinalSaleAmountMin = 0;
+export const updateAdminQuoteBodyFinalSaleAmountMax = 10000000;
+
+
+
+export const UpdateAdminQuoteBody = zod.object({
+  "status": zod.enum(['new', 'pending_contact', 'quote_sent', 'negotiating', 'accepted', 'rejected', 'completed']).optional(),
+  "adminNotes": zod.string().max(updateAdminQuoteBodyAdminNotesMax).nullish(),
+  "lastContactAt": zod.coerce.date().nullish(),
+  "nextFollowUpAt": zod.coerce.date().nullish(),
+  "finalSaleAmount": zod.number().min(updateAdminQuoteBodyFinalSaleAmountMin).max(updateAdminQuoteBodyFinalSaleAmountMax).nullish()
+})
+
+export const UpdateAdminQuoteResponse = zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string(),
+  "contactName": zod.string(),
+  "email": zod.string().email(),
+  "phone": zod.string().nullable(),
+  "apartmentCount": zod.number().int().nullable(),
+  "items": zod.array(zod.object({
+  "selectionType": zod.enum(['product', 'combo']),
+  "selectionId": zod.string(),
+  "name": zod.string(),
+  "quantity": zod.number().int(),
+  "units": zod.number().int(),
+  "unitPrice": zod.number(),
+  "subtotal": zod.number(),
+  "discount": zod.number(),
+  "lineTotal": zod.number()
+})),
+  "individualUnits": zod.number().int(),
+  "totalUnits": zod.number().int(),
+  "subtotal": zod.number(),
+  "discountTotal": zod.number(),
+  "estimatedTotal": zod.number(),
+  "notes": zod.string().nullable(),
+  "status": zod.enum(['new', 'pending_contact', 'quote_sent', 'negotiating', 'accepted', 'rejected', 'completed']),
+  "adminNotes": zod.string().nullable(),
+  "lastContactAt": zod.coerce.date().nullable(),
+  "nextFollowUpAt": zod.coerce.date().nullable(),
+  "finalSaleAmount": zod.number().nullable(),
+  "businessEmailStatus": zod.enum(['not_configured', 'sent', 'failed']),
+  "customerEmailStatus": zod.enum(['not_configured', 'sent', 'failed']),
+  "receivedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

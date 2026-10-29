@@ -15,23 +15,8 @@ export interface QuoteLineInput {
      */
   selectionId: string;
   /**
-     * @minLength 1
-     * @maxLength 160
-     */
-  name: string;
-  /**
      * @minimum 1
      * @maximum 9999
      */
   quantity: number;
-  /**
-     * @minimum 0
-     * @maximum 1000000
-     */
-  unitPrice: number;
-  /**
-     * @minimum 0
-     * @maximum 10000000
-     */
-  lineTotal: number;
 }
